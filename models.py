@@ -10,15 +10,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from dataloader import TestDataset, TrainDataset, SingledirectionalOneShotIterator
-import random
-import pickle
-import math
 import collections
-import itertools
-import time
 from tqdm import tqdm
-import os
 
 def Identity(x):
     return x
@@ -597,6 +590,9 @@ class KGReasoning(nn.Module):
         loss.backward()
         optimizer.step()
         log = {
+            'positive_sample': positive_sample,
+            'negative_sample': negative_sample,
+            'subsampling_weight': subsampling_weight,
             'positive_sample_loss': positive_sample_loss.item(),
             'negative_sample_loss': negative_sample_loss.item(),
             'loss': loss.item(),
