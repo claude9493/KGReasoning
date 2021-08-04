@@ -382,6 +382,11 @@ class KGReasoning(nn.Module):
             negative_logit = torch.cat([negative_logit, negative_union_logit], dim=0)
         else:
             negative_logit = None
+        
+        self.all_alpha_embeddings = all_alpha_embeddings
+        self.all_beta_embeddings = all_beta_embeddings
+        self.positive_embedding = positive_embedding
+        self.negative_embedding = negative_embedding
 
         return positive_logit, negative_logit, subsampling_weight, all_idxs+all_union_idxs
 
@@ -587,16 +592,35 @@ class KGReasoning(nn.Module):
         negative_sample_loss /= subsampling_weight.sum()
 
         loss = (positive_sample_loss + negative_sample_loss)/2
-        loss.backward()
-        optimizer.step()
         log = {
             'positive_sample': positive_sample,
             'negative_sample': negative_sample,
             'subsampling_weight': subsampling_weight,
+            'positive_logits': positive_logit.detach().cpu().numpy(),
+            'negative_logits': negative_logit.detach().cpu().numpy(),
+            'all_alpha_embeddings': model.all_alpha_embeddings.detach().cpu().numpy(),
+            'all_beta_embeddings': model.all_beta_embeddings.detach().cpu().numpy(),
+            'positive_embedding': model.positive_embedding.detach().cpu().numpy(),
+            'negative_embedding': model.negative_embedding.detach().cpu().numpy(),
             'positive_sample_loss': positive_sample_loss.item(),
             'negative_sample_loss': negative_sample_loss.item(),
             'loss': loss.item(),
         }
+        loss.backward()
+        
+        def logging_grad_fn(grad_fn, val, level=0):
+            if grad_fn is None: return
+            logging.info(f"ref grad_fn stack {'-'*level} | {str(grad_fn)} | {val}")
+            for next_grad_fn_obj, next_val in grad_fn.next_functions:
+                logging_grad_fn(next_grad_fn_obj, next_val, level + 1)
+        logging_grad_fn(loss.grad_fn, 0)
+        
+        forward_state_dict = model.state_dict()
+        for k in forward_state_dict:
+            log[f"forward_{k}"] = forward_state_dict[k].detach().cpu().numpy()
+        
+        optimizer.step()
+        
         return log
 
     @staticmethod
