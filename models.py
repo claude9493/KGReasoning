@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from dataloader import TestDataset, TrainDataset, SingledirectionalOneShotIterator
+from .dataloader import TestDataset, TrainDataset, SingledirectionalOneShotIterator
 import random
 import pickle
 import math
@@ -601,6 +601,25 @@ class KGReasoning(nn.Module):
             'negative_sample_loss': negative_sample_loss.item(),
             'loss': loss.item(),
         }
+<<<<<<< Updated upstream
+=======
+        loss.backward()
+        '''
+        def logging_grad_fn(grad_fn, val, level=0):
+            if grad_fn is None: return
+            logging.info(f"ref grad_fn stack {'-'*level} | {str(grad_fn)} | {val}")
+            for next_grad_fn_obj, next_val in grad_fn.next_functions:
+                logging_grad_fn(next_grad_fn_obj, next_val, level + 1)
+        logging_grad_fn(loss.grad_fn, 0)
+        '''
+
+        forward_state_dict = model.state_dict()
+        for k in forward_state_dict:
+            log[f"forward_{k}"] = forward_state_dict[k].detach().cpu().numpy()
+
+        optimizer.step()
+
+>>>>>>> Stashed changes
         return log
 
     @staticmethod
