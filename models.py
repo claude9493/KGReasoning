@@ -917,6 +917,12 @@ class KGReasoning(nn.Module):
             log[f"forward_{k}"] = forward_state_dict[k].detach().cpu().numpy()
 
         optimizer.step()
+        if model.geo == 'logic':
+            entity_embedding = model._parameters['entity_embedding'].data
+            if model.bounded:
+                model._parameters['entity_embedding'].data = order_bounds(entity_embedding)
+            else:
+                model._parameters['entity_embedding'].data = torch.clamp(entity_embedding, 0, 1)
 
         return log
 
