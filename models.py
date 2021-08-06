@@ -682,8 +682,9 @@ class KGReasoning(nn.Module):
             negative_logit = torch.cat([negative_logit, negative_union_logit], dim=0)
         else:
             negative_logit = None
-
-        return positive_logit, negative_logit, subsampling_weight, all_idxs+all_union_idxs, all_entropy
+        self.positive_embedding = positive_embedding
+        self.negative_embedding = negative_embedding
+        return positive_logit, negative_logit, subsampling_weight, all_idxs+all_union_idxs
 
     def transform_union_query(self, queries, query_structure):
         '''
