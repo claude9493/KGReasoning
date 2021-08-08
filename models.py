@@ -184,13 +184,13 @@ class KGReasoning(nn.Module):
                                              self.projection_regularizer, 
                                              num_layers)
 
-    def forward(self, positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict):
+    def forward(self, positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict, **kwargs):
         if self.geo == 'box':
             return self.forward_box(positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict)
         elif self.geo == 'vec':
             return self.forward_vec(positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict)
         elif self.geo == 'beta':
-            return self.forward_beta(positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict)
+            return self.forward_beta(positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict, **kwargs)
 
     def embed_query_box(self, queries, query_structure, idx):
         '''
@@ -308,7 +308,7 @@ class KGReasoning(nn.Module):
         logit = self.gamma - torch.norm(torch.distributions.kl.kl_divergence(entity_dist, query_dist), p=1, dim=-1)
         return logit
 
-    def forward_beta(self, positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict):
+    def forward_beta(self, positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict, tc=None):
         all_idxs, all_alpha_embeddings, all_beta_embeddings = [], [], []
         all_union_idxs, all_union_alpha_embeddings, all_union_beta_embeddings = [], [], []
         for query_structure in batch_queries_dict:
@@ -383,10 +383,12 @@ class KGReasoning(nn.Module):
         else:
             negative_logit = None
         
-        self.all_alpha_embeddings = all_alpha_embeddings
-        self.all_beta_embeddings = all_beta_embeddings
-        self.positive_embedding = positive_embedding
-        self.negative_embedding = negative_embedding
+        tc['pred_alpha'] = all_alpha_embeddings
+        tc['pred_beta'] = all_beta_embeddings
+        tc['positive_embedding'] = positive_embedding
+        tc['negative_embedding'] = negative_embedding
+        tc['positive_logits'] = positive_logit
+        tc['negative_logits'] = negative_logit
 
         return positive_logit, negative_logit, subsampling_weight, all_idxs+all_union_idxs
 
@@ -562,7 +564,7 @@ class KGReasoning(nn.Module):
         return positive_logit, negative_logit, subsampling_weight, all_idxs+all_union_idxs
 
     @staticmethod
-    def train_step(model, optimizer, train_iterator, args, step):
+    def train_step(model, optimizer, train_iterator, args, step=0, tc=None):
         model.train()
         optimizer.zero_grad()
 
@@ -582,7 +584,7 @@ class KGReasoning(nn.Module):
             negative_sample = negative_sample.cuda()
             subsampling_weight = subsampling_weight.cuda()
 
-        positive_logit, negative_logit, subsampling_weight, _ = model(positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict)
+        positive_logit, negative_logit, subsampling_weight, _ = model(positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict, tc=tc)
 
         negative_score = F.logsigmoid(-negative_logit).mean(dim=1)
         positive_score = F.logsigmoid(positive_logit).squeeze(dim=1)
@@ -596,29 +598,20 @@ class KGReasoning(nn.Module):
             'positive_sample': positive_sample,
             'negative_sample': negative_sample,
             'subsampling_weight': subsampling_weight,
-            'positive_logits': positive_logit.detach().cpu().numpy(),
-            'negative_logits': negative_logit.detach().cpu().numpy(),
-            'all_alpha_embeddings': model.all_alpha_embeddings.detach().cpu().numpy(),
-            'all_beta_embeddings': model.all_beta_embeddings.detach().cpu().numpy(),
-            'positive_embedding': model.positive_embedding.detach().cpu().numpy(),
-            'negative_embedding': model.negative_embedding.detach().cpu().numpy(),
-            'positive_sample_loss': positive_sample_loss.item(),
-            'negative_sample_loss': negative_sample_loss.item(),
-            'loss': loss.item(),
+        #     'positive_logits': positive_logit.detach().cpu().numpy(),
+        #     'negative_logits': negative_logit.detach().cpu().numpy(),
+            # 'all_alpha_embeddings': model.all_alpha_embeddings.detach().cpu().numpy(),
+            # 'all_beta_embeddings': model.all_beta_embeddings.detach().cpu().numpy(),
+            # 'positive_embedding': model.positive_embedding.detach().cpu().numpy(),
+            # 'negative_embedding': model.negative_embedding.detach().cpu().numpy(),
+            # 'positive_sample_loss': positive_sample_loss.item(),
+        #     'negative_sample_loss': negative_sample_loss.item(),
+        #     'loss': loss.item(),
         }
-        loss.backward()
-        
-        def logging_grad_fn(grad_fn, val, level=0):
-            if grad_fn is None: return
-            logging.info(f"ref grad_fn stack {'-'*level} | {str(grad_fn)} | {val}")
-            for next_grad_fn_obj, next_val in grad_fn.next_functions:
-                logging_grad_fn(next_grad_fn_obj, next_val, level + 1)
-        logging_grad_fn(loss.grad_fn, 0)
-        
-        forward_state_dict = model.state_dict()
-        for k in forward_state_dict:
-            log[f"forward_{k}"] = forward_state_dict[k].detach().cpu().numpy()
-        
+        # forward_state_dict = model.state_dict()
+        # for k in forward_state_dict:
+            # log[f"forward_{k}"] = forward_state_dict[k].detach().cpu().numpy()
+        tc.set_loss(loss)
         optimizer.step()
         
         return log
