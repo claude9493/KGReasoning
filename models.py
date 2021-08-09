@@ -353,7 +353,7 @@ class KGReasoning(nn.Module):
         elif self.geo == 'vec':
             return self.forward_vec(positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict)
         elif self.geo == 'beta':
-            return self.forward_beta(positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict)
+            return self.forward_beta(positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict, **kwargs)
         elif self.geo == 'logic':
             return self.forward_logic(positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict)
 
@@ -473,7 +473,11 @@ class KGReasoning(nn.Module):
         logit = self.gamma - torch.norm(torch.distributions.kl.kl_divergence(entity_dist, query_dist), p=1, dim=-1)
         return logit
 
-    def forward_beta(self, positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict, tc=None):
+    def forward_beta(self, positive_sample, negative_sample, subsampling_weight, batch_queries_dict, batch_idxs_dict, **kwargs):
+        if 'tc' in kwargs:
+            tc = kwargs['tc']
+        else:
+            tc = None
         all_idxs, all_alpha_embeddings, all_beta_embeddings = [], [], []
         all_union_idxs, all_union_alpha_embeddings, all_union_beta_embeddings = [], [], []
         for query_structure in batch_queries_dict:
@@ -547,13 +551,16 @@ class KGReasoning(nn.Module):
             negative_logit = torch.cat([negative_logit, negative_union_logit], dim=0)
         else:
             negative_logit = None
+
+        if tc:
+            tc['pred_alpha'] = all_alpha_embeddings
+            tc['pred_beta'] = all_beta_embeddings
+            tc['positive_embedding'] = positive_embedding
+            tc['negative_embedding'] = negative_embedding
+            tc['positive_logits'] = positive_logit
+            tc['negative_logits'] = negative_logit
         
-        tc['pred_alpha'] = all_alpha_embeddings
-        tc['pred_beta'] = all_beta_embeddings
-        tc['positive_embedding'] = positive_embedding
-        tc['negative_embedding'] = negative_embedding
-        tc['positive_logits'] = positive_logit
-        tc['negative_logits'] = negative_logit
+        return positive_logit, negative_logit, subsampling_weight, all_idxs+all_union_idxs 
 
     def embed_query_logic(self, queries, query_structure, idx):
         '''
