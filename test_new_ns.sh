@@ -1,0 +1,1 @@
+python main.py --do_train --data_path data/FB15k-237-betae -n 16 -b 16 -d 400 -g 60 -lr 0.0001 --max_steps 2 --cpu_num 1 --geo beta -betam "(1600,2)"
